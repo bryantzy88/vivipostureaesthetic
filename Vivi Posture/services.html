@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>服务项目 - 徒手整形美容中心</title>
+    <link rel="stylesheet" href="/vivipostureaesthetic/styles.css">
+    <link rel="stylesheet" href="/vivipostureaesthetic/css/vant.css">
+</head>
+<body>
+    <div id="app">
+        <!-- 导航栏 -->
+        <div id="navigation"></div>
+
+        <div class="services-page">
+            <div class="section-header">
+                <h2 class="section-title">我们的服务</h2>
+                <p class="section-subtitle">专业的徒手整形美容服务</p>
+            </div>
+
+            <div class="services-grid">
+                <div v-for="service in services" :key="service.id" class="service-card">
+                    <img :src="'/vivipostureaesthetic/images/services/' + service.image" :alt="service.name">
+                    <div class="service-content">
+                        <h3>{{ service.name }}</h3>
+                        <p>{{ service.description }}</p>
+                        <div class="service-price">RM {{ service.price }}</div>
+                        <van-button type="primary" size="small" @click="bookService(service)">
+                            立即预约
+                        </van-button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/vivipostureaesthetic/js/vue.min.js"></script>
+    <script src="/vivipostureaesthetic/js/vant.min.js"></script>
+    <script src="/vivipostureaesthetic/js/axios.min.js"></script>
+    <script>
+        // 加载导航栏
+        fetch('/vivipostureaesthetic/navigation.html')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('navigation').innerHTML = html;
+            });
+
+        new Vue({
+            el: '#app',
+            data: {
+                services: []
+            },
+            methods: {
+                bookService(service) {
+                    window.location.href = `/vivipostureaesthetic/index.html#appointment?service=${service.id}`;
+                }
+            },
+            mounted() {
+                axios.get('/vivipostureaesthetic/api/services')
+                    .then(response => {
+                        this.services = response.data;
+                    });
+            }
+        });
+    </script>
+</body>
+</html> 

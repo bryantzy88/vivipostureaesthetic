@@ -1,0 +1,419 @@
+<template id="appointment-management-template">
+    <div class="appointment-management">
+        <!-- 搜索和筛选 -->
+        <div class="filter-bar">
+            <van-search
+                v-model="searchKey"
+                placeholder="搜索用户名/手机号"
+                @search="onSearch"
+            />
+            <van-dropdown-menu>
+                <van-dropdown-item v-model="status" :options="statusOptions" />
+                <van-dropdown-item v-model="dateRange" :options="dateOptions" />
+            </van-dropdown-menu>
+        </div>
+
+        <!-- 预约日历视图 -->
+        <div class="calendar-view">
+            <van-calendar
+                :show-title="false"
+                :min-date="minDate"
+                :max-date="maxDate"
+                :formatter="calendarFormatter"
+                @select="onSelectDate"
+            />
+        </div>
+
+        <!-- 预约列表 -->
+        <div class="appointment-list">
+            <div v-for="appointment in appointments" :key="appointment.id" class="appointment-card">
+                <div class="appointment-header">
+                    <div class="time-info">
+                        <div class="date">{{ formatDate(appointment.appointment_time) }}</div>
+                        <div class="time">{{ formatTime(appointment.appointment_time) }}</div>
+                    </div>
+                    <van-tag :type="getStatusType(appointment.status)">
+                        {{ getStatusText(appointment.status) }}
+                    </van-tag>
+                </div>
+
+                <div class="appointment-content">
+                    <div class="user-info">
+                        <van-image
+                            round
+                            width="40"
+                            height="40"
+                            :src="appointment.user.avatar"
+                        />
+                        <div class="user-details">
+                            <div class="user-name">{{ appointment.user.name }}</div>
+                            <div class="user-phone">{{ appointment.user.phone }}</div>
+                        </div>
+                    </div>
+
+                    <div class="service-info">
+                        <h4>{{ appointment.service.name }}</h4>
+                        <div class="duration">预计时长：{{ appointment.service.duration }}分钟</div>
+                    </div>
+
+                    <div class="notes" v-if="appointment.notes">
+                        备注：{{ appointment.notes }}
+                    </div>
+                </div>
+
+                <div class="appointment-footer">
+                    <template v-if="appointment.status === 'pending'">
+                        <van-button 
+                            size="small" 
+                            type="primary" 
+                            @click="confirmAppointment(appointment.id)"
+                        >确认预约</van-button>
+                        <van-button 
+                            size="small" 
+                            type="danger" 
+                            @click="rejectAppointment(appointment.id)"
+                        >拒绝预约</van-button>
+                    </template>
+                    <template v-if="appointment.status === 'confirmed'">
+                        <van-button 
+                            size="small" 
+                            type="success" 
+                            @click="completeAppointment(appointment.id)"
+                        >完成服务</van-button>
+                        <van-button 
+                            size="small" 
+                            type="danger" 
+                            @click="cancelAppointment(appointment.id)"
+                        >取消预约</van-button>
+                    </template>
+                    <van-button 
+                        size="small" 
+                        @click="showAppointmentDetail(appointment)"
+                    >详情</van-button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 预约详情弹窗 -->
+        <van-popup v-model="showDetail" position="right" style="width: 80%; height: 100%;">
+            <div class="appointment-detail" v-if="currentAppointment">
+                <van-nav-bar
+                    title="预约详情"
+                    left-arrow
+                    @click-left="showDetail = false"
+                />
+                <div class="detail-content">
+                    <div class="detail-section">
+                        <h3>预约信息</h3>
+                        <van-cell-group>
+                            <van-cell title="预约时间" :value="formatDateTime(currentAppointment.appointment_time)" />
+                            <van-cell title="预约状态" :value="getStatusText(currentAppointment.status)" />
+                            <van-cell title="创建时间" :value="formatDateTime(currentAppointment.created_at)" />
+                            <van-cell 
+                                v-if="currentAppointment.notes" 
+                                title="备注" 
+                                :value="currentAppointment.notes" 
+                            />
+                        </van-cell-group>
+                    </div>
+
+                    <div class="detail-section">
+                        <h3>用户信息</h3>
+                        <van-cell-group>
+                            <van-cell title="用户名" :value="currentAppointment.user.name" />
+                            <van-cell title="手机号" :value="currentAppointment.user.phone" />
+                            <van-cell title="邮箱" :value="currentAppointment.user.email" />
+                        </van-cell-group>
+                    </div>
+
+                    <div class="detail-section">
+                        <h3>服务信息</h3>
+                        <van-cell-group>
+                            <van-cell title="服务名称" :value="currentAppointment.service.name" />
+                            <van-cell title="服务分类" :value="currentAppointment.service.category_name" />
+                            <van-cell title="服务时长" :value="`${currentAppointment.service.duration}分钟`" />
+                            <van-cell title="服务价格" :value="`RM ${currentAppointment.service.price}`" />
+                        </van-cell-group>
+                    </div>
+                </div>
+            </div>
+        </van-popup>
+    </div>
+</template>
+
+<script>
+Vue.component('appointment-management', {
+    template: '#appointment-management-template',
+    data() {
+        return {
+            searchKey: '',
+            status: 'all',
+            dateRange: 'upcoming',
+            appointments: [],
+            showDetail: false,
+            currentAppointment: null,
+            minDate: new Date(),
+            maxDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+            statusOptions: [
+                { text: '全部状态', value: 'all' },
+                { text: '待确认', value: 'pending' },
+                { text: '已确认', value: 'confirmed' },
+                { text: '已完成', value: 'completed' },
+                { text: '已取消', value: 'cancelled' }
+            ],
+            dateOptions: [
+                { text: '即将到来', value: 'upcoming' },
+                { text: '本周', value: 'thisWeek' },
+                { text: '本月', value: 'thisMonth' },
+                { text: '已过期', value: 'past' }
+            ]
+        };
+    },
+    methods: {
+        onSearch() {
+            this.loadAppointments();
+        },
+        loadAppointments() {
+            axios.get('/api/admin/appointments', {
+                params: {
+                    status: this.status,
+                    date_range: this.dateRange,
+                    search: this.searchKey
+                }
+            })
+            .then(response => {
+                this.appointments = response.data.data;
+            });
+        },
+        calendarFormatter(day) {
+            const appointments = this.appointments.filter(apt => {
+                const aptDate = new Date(apt.appointment_time);
+                return aptDate.toDateString() === day.date.toDateString();
+            });
+
+            if (appointments.length > 0) {
+                day.bottomInfo = `${appointments.length}个预约`;
+                day.className = 'has-appointments';
+            }
+            return day;
+        },
+        onSelectDate(date) {
+            this.dateRange = 'custom';
+            // 加载选中日期的预约
+            this.loadAppointmentsByDate(date);
+        },
+        confirmAppointment(id) {
+            this.$dialog.confirm({
+                title: '确认预约',
+                message: '确定要确认这个预约吗？'
+            }).then(() => {
+                axios.post(`/api/admin/appointments/${id}/confirm`)
+                    .then(response => {
+                        if (response.data.code === 200) {
+                            this.$toast.success('预约已确认');
+                            this.loadAppointments();
+                        }
+                    });
+            });
+        },
+        rejectAppointment(id) {
+            this.$dialog.confirm({
+                title: '拒绝预约',
+                message: '确定要拒绝这个预约吗？'
+            }).then(() => {
+                axios.post(`/api/admin/appointments/${id}/reject`)
+                    .then(response => {
+                        if (response.data.code === 200) {
+                            this.$toast.success('预约已拒绝');
+                            this.loadAppointments();
+                        }
+                    });
+            });
+        },
+        completeAppointment(id) {
+            this.$dialog.confirm({
+                title: '完成服务',
+                message: '确定要标记这个预约为已完成吗？'
+            }).then(() => {
+                axios.post(`/api/admin/appointments/${id}/complete`)
+                    .then(response => {
+                        if (response.data.code === 200) {
+                            this.$toast.success('服务已完成');
+                            this.loadAppointments();
+                        }
+                    });
+            });
+        },
+        cancelAppointment(id) {
+            this.$dialog.confirm({
+                title: '取消预约',
+                message: '确定要取消这个预约吗？'
+            }).then(() => {
+                axios.post(`/api/admin/appointments/${id}/cancel`)
+                    .then(response => {
+                        if (response.data.code === 200) {
+                            this.$toast.success('预约已取消');
+                            this.loadAppointments();
+                        }
+                    });
+            });
+        },
+        showAppointmentDetail(appointment) {
+            this.currentAppointment = appointment;
+            this.showDetail = true;
+        },
+        getStatusType(status) {
+            const types = {
+                pending: 'warning',
+                confirmed: 'primary',
+                completed: 'success',
+                cancelled: 'danger'
+            };
+            return types[status] || 'default';
+        },
+        getStatusText(status) {
+            const texts = {
+                pending: '待确认',
+                confirmed: '已确认',
+                completed: '已完成',
+                cancelled: '已取消'
+            };
+            return texts[status] || status;
+        },
+        formatDate(datetime) {
+            return new Date(datetime).toLocaleDateString();
+        },
+        formatTime(datetime) {
+            return new Date(datetime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        },
+        formatDateTime(datetime) {
+            return new Date(datetime).toLocaleString();
+        }
+    },
+    mounted() {
+        this.loadAppointments();
+    }
+});
+</script>
+
+<style>
+.appointment-management {
+    padding: 20px;
+}
+
+.filter-bar {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.calendar-view {
+    margin-bottom: 20px;
+    background: white;
+    border-radius: 8px;
+    padding: 15px;
+}
+
+.has-appointments {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.appointment-card {
+    background: white;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.appointment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.time-info {
+    text-align: center;
+}
+
+.time-info .date {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 5px;
+}
+
+.time-info .time {
+    font-size: 14px;
+    color: #666;
+}
+
+.appointment-content {
+    margin-bottom: 15px;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.user-details {
+    margin-left: 10px;
+}
+
+.user-name {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.user-phone {
+    font-size: 12px;
+    color: #999;
+}
+
+.service-info {
+    margin-bottom: 10px;
+}
+
+.service-info h4 {
+    margin: 0 0 5px;
+    font-size: 16px;
+}
+
+.duration {
+    font-size: 14px;
+    color: #666;
+}
+
+.notes {
+    font-size: 14px;
+    color: #666;
+    padding: 10px;
+    background: #f9f9f9;
+    border-radius: 4px;
+}
+
+.appointment-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 15px;
+    border-top: 1px solid #f5f5f5;
+}
+
+.detail-content {
+    padding: 20px;
+}
+
+.detail-section {
+    margin-bottom: 30px;
+}
+
+.detail-section h3 {
+    margin: 0 0 15px;
+    padding-left: 10px;
+    border-left: 3px solid var(--primary-color);
+}
+</style> 

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>案例展示 - 徒手整形美容中心</title>
+    <link rel="stylesheet" href="/vivipostureaesthetic/styles.css">
+    <link rel="stylesheet" href="/vivipostureaesthetic/css/vant.css">
+</head>
+<body>
+    <div id="app">
+        <!-- 导航栏 -->
+        <div id="navigation"></div>
+
+        <div class="cases-section">
+            <div class="section-header">
+                <h2 class="section-title">成功案例</h2>
+                <p class="section-subtitle">每一个案例都是我们用心服务的见证</p>
+            </div>
+            
+            <div class="cases-filter">
+                <button class="filter-btn active">全部案例</button>
+                <button class="filter-btn">颈椎病</button>
+                <button class="filter-btn">腰椎间盘突出</button>
+                <button class="filter-btn">运动损伤</button>
+                <button class="filter-btn">姿势问题</button>
+            </div>
+            
+            <div class="cases-grid">
+                <div class="case-card">
+                    <div class="case-image">
+                        <img src="/vivipostureaesthetic/images/case1.jpg" alt="康复案例">
+                        <div class="case-overlay">
+                            <span class="before-after">治疗前后对比</span>
+                        </div>
+                    </div>
+                    <div class="case-content">
+                        <div class="case-tag">颈椎病</div>
+                        <h3>长期办公导致的颈椎问题</h3>
+                        <div class="case-stats">
+                            <div class="stat">
+                                <span class="label">改善程度</span>
+                                <span class="value">90%</span>
+                            </div>
+                            <div class="stat">
+                                <span class="label">治疗周期</span>
+                                <span class="value">8周</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 更多案例卡片 -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/vivipostureaesthetic/js/vue.min.js"></script>
+    <script src="/vivipostureaesthetic/js/vant.min.js"></script>
+    <script src="/vivipostureaesthetic/js/axios.min.js"></script>
+    <script>
+        // 加载导航栏
+        fetch('/vivipostureaesthetic/navigation.html')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('navigation').innerHTML = html;
+            });
+
+        new Vue({
+            el: '#app'
+        });
+    </script>
+</body>
+</html> 
