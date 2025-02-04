@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人中心 - 徒手整形美容中心</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/vant.css">
+</head>
+<body>
+    <div id="userApp">
+        <!-- 用户信息头部 -->
+        <div class="user-header">
+            <div class="user-info">
+                <van-image round width="64" height="64" :src="userInfo.avatar" />
+                <div class="user-detail">
+                    <h3>{{ userInfo.nickname || '未登录' }}</h3>
+                    <p>邀请码：{{ userInfo.inviteCode }}</p>
+                </div>
+            </div>
+            <div class="user-balance">
+                <div class="balance-item">
+                    <span class="amount">¥{{ userInfo.balance }}</span>
+                    <span class="label">账户余额</span>
+                </div>
+                <div class="balance-item">
+                    <span class="amount">¥{{ userInfo.commission }}</span>
+                    <span class="label">推广收益</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 功能菜单 -->
+        <van-cell-group>
+            <van-cell title="我的预约" is-link to="appointments.html" />
+            <van-cell title="充值记录" is-link to="recharge-history.html" />
+            <van-cell title="邀请好友" is-link @click="showShare" />
+            <van-cell title="我的收益" is-link to="commission.html" />
+        </van-cell-group>
+
+        <!-- 推广数据 -->
+        <div class="promotion-stats">
+            <h3>推广数据</h3>
+            <van-grid :column-num="3">
+                <van-grid-item>
+                    <span class="stat-num">{{ stats.inviteCount }}</span>
+                    <span class="stat-label">邀请人数</span>
+                </van-grid-item>
+                <van-grid-item>
+                    <span class="stat-num">{{ stats.totalCommission }}</span>
+                    <span class="stat-label">总收益</span>
+                </van-grid-item>
+                <van-grid-item>
+                    <span class="stat-num">{{ stats.thisMonth }}</span>
+                    <span class="stat-label">本月收益</span>
+                </van-grid-item>
+            </van-grid>
+        </div>
+
+        <!-- 底部导航 -->
+        <van-tabbar v-model="activeTab">
+            <van-tabbar-item icon="home-o" to="../index.html">首页</van-tabbar-item>
+            <van-tabbar-item icon="clock-o" to="appointments.html">预约</van-tabbar-item>
+            <van-tabbar-item icon="gold-coin-o" to="recharge.html">充值</van-tabbar-item>
+            <van-tabbar-item icon="user-o" to="user.html">我的</van-tabbar-item>
+        </van-tabbar>
+
+        <!-- 分享弹窗 -->
+        <van-share-sheet
+            v-model="showShareSheet"
+            title="邀请好友"
+            :options="shareOptions"
+            @select="onShareSelect"
+        />
+    </div>
+
+    <script src="../js/vue.min.js"></script>
+    <script src="../js/vant.min.js"></script>
+    <script src="../js/axios.min.js"></script>
+    <script>
+        new Vue({
+            el: '#userApp',
+            data: {
+                activeTab: 3,
+                showShareSheet: false,
+                userInfo: {
+                    nickname: '张三',
+                    avatar: '../images/avatar-default.png',
+                    inviteCode: 'ABC123',
+                    balance: '1280.00',
+                    commission: '358.00'
+                },
+                stats: {
+                    inviteCount: 12,
+                    totalCommission: '1280.00',
+                    thisMonth: '358.00'
+                },
+                shareOptions: [
+                    { name: '微信', icon: 'wechat' },
+                    { name: '朋友圈', icon: 'wechat-moments' },
+                    { name: '复制链接', icon: 'link' }
+                ]
+            },
+            methods: {
+                showShare() {
+                    this.showShareSheet = true;
+                },
+                onShareSelect(option) {
+                    this.showShareSheet = false;
+                    // 处理分享逻辑
+                    if (option.name === '复制链接') {
+                        const link = `https://example.com/register?invite=${this.userInfo.inviteCode}`;
+                        navigator.clipboard.writeText(link).then(() => {
+                            this.$toast('链接已复制');
+                        });
+                    }
+                }
+            },
+            mounted() {
+                // 获取用户信息
+                axios.get('/api/user/info')
+                    .then(response => {
+                        if (response.data.code === 200) {
+                            this.userInfo = response.data.data;
+                        }
+                    });
+                
+                // 获取推广统计
+                axios.get('/api/user/promotion/stats')
+                    .then(response => {
+                        if (response.data.code === 200) {
+                            this.stats = response.data.data;
+                        }
+                    });
+            }
+        });
+    </script>
+</body>
+</html> 

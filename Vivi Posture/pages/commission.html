@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>推广收益 - 徒手整形美容中心</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/vant.css">
+    <link rel="stylesheet" href="../css/commission.css">
+</head>
+<body>
+    <div id="commissionApp">
+        <!-- 顶部导航 -->
+        <van-nav-bar
+            title="推广收益"
+            left-arrow
+            @click-left="onClickLeft"
+        />
+
+        <!-- 收益概览 -->
+        <div class="commission-overview">
+            <div class="total-commission">
+                <div class="label">累计收益(元)</div>
+                <div class="amount">{{ totalCommission }}</div>
+            </div>
+            <div class="commission-stats">
+                <div class="stat-item">
+                    <div class="value">{{ monthCommission }}</div>
+                    <div class="label">本月收益</div>
+                </div>
+                <div class="stat-item">
+                    <div class="value">{{ inviteCount }}</div>
+                    <div class="label">邀请人数</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 收益明细 -->
+        <div class="commission-details">
+            <van-tabs v-model="activeTab" sticky>
+                <van-tab title="收益明细">
+                    <van-list
+                        v-model="loading"
+                        :finished="finished"
+                        finished-text="没有更多了"
+                        @load="onLoad"
+                    >
+                        <div class="detail-item" v-for="item in details" :key="item.id">
+                            <div class="detail-info">
+                                <div class="detail-title">{{ item.title }}</div>
+                                <div class="detail-time">{{ item.time }}</div>
+                            </div>
+                            <div class="detail-amount" :class="{ 'income': item.type === 'income' }">
+                                {{ item.type === 'income' ? '+' : '-' }}{{ item.amount }}
+                            </div>
+                        </div>
+                    </van-list>
+                </van-tab>
+                <van-tab title="邀请记录">
+                    <van-list
+                        v-model="inviteLoading"
+                        :finished="inviteFinished"
+                        finished-text="没有更多了"
+                        @load="onInviteLoad"
+                    >
+                        <div class="invite-item" v-for="user in inviteList" :key="user.id">
+                            <van-image round width="40" height="40" :src="user.avatar" />
+                            <div class="invite-info">
+                                <div class="invite-name">{{ user.nickname }}</div>
+                                <div class="invite-time">注册时间：{{ user.registerTime }}</div>
+                            </div>
+                            <div class="invite-contribution">
+                                贡献收益：¥{{ user.contribution }}
+                            </div>
+                        </div>
+                    </van-list>
+                </van-tab>
+            </van-tabs>
+        </div>
+
+        <!-- 提现按钮 -->
+        <div class="withdraw-bar">
+            <van-button type="primary" block @click="showWithdraw">
+                立即提现
+            </van-button>
+        </div>
+
+        <!-- 提现弹窗 -->
+        <van-popup v-model="showWithdrawPopup" position="bottom" round>
+            <div class="withdraw-popup">
+                <div class="popup-title">提现到微信</div>
+                <div class="withdraw-amount">
+                    <span class="currency">¥</span>
+                    <input 
+                        type="number" 
+                        v-model="withdrawAmount"
+                        placeholder="请输入提现金额"
+                    >
+                </div>
+                <div class="withdraw-info">
+                    可提现金额：¥{{ availableAmount }}
+                </div>
+                <van-button type="primary" block @click="onWithdraw">
+                    确认提现
+                </van-button>
+            </div>
+        </van-popup>
+    </div>
+
+    <script src="../js/vue.min.js"></script>
+    <script src="../js/vant.min.js"></script>
+    <script src="../js/axios.min.js"></script>
+    <script>
+        new Vue({
+            el: '#commissionApp',
+            data: {
+                activeTab: 0,
+                loading: false,
+                finished: false,
+                inviteLoading: false,
+                inviteFinished: false,
+                showWithdrawPopup: false,
+                totalCommission: '0.00',
+                monthCommission: '0.00',
+                inviteCount: 0,
+                withdrawAmount: '',
+                availableAmount: '0.00',
+                details: [],
+                inviteList: [],
+                page: 1,
+                invitePage: 1
+            },
+            methods: {
+                onClickLeft() {
+                    history.back();
+                },
+                showWithdraw() {
+                    this.showWithdrawPopup = true;
+                },
+                onWithdraw() {
+                    if (!this.withdrawAmount) {
+                        this.$toast('请输入提现金额');
+                        return;
+                    }
+                    if (parseFloat(this.withdrawAmount) > parseFloat(this.availableAmount)) {
+                        this.$toast('提现金额不能大于可提现金额');
+                        return;
+                    }
+                    
+                    // 提交提现请求
+                    axios.post('/api/commission/withdraw', {
+                        amount: this.withdrawAmount
+                    })
+                    .then(response => {
+                        if (response.data.code === 200) {
+                            this.$toast.success('提现申请已提交');
+                            this.showWithdrawPopup = false;
+                            this.loadCommissionData();
+                        } else {
+                            this.$toast.fail(response.data.message);
+                        }
+                    })
+                    .catch(() => {
+                        this.$toast.fail('提现失败，请重试');
+                    });
+                },
+                onLoad() {
+                    // 加载收益明细
+                    axios.get(`/api/commission/details?page=${this.page}`)
+                        .then(response => {
+                            const { data } = response.data;
+                            this.details.push(...data.items);
+                            this.loading = false;
+                            if (data.items.length < 10) {
+                                this.finished = true;
+                            }
+                            this.page += 1;
+                        });
+                },
+                onInviteLoad() {
+                    // 加载邀请记录
+                    axios.get(`/api/commission/invites?page=${this.invitePage}`)
+                        .then(response => {
+                            const { data } = response.data;
+                            this.inviteList.push(...data.items);
+                            this.inviteLoading = false;
+                            if (data.items.length < 10) {
+                                this.inviteFinished = true;
+                            }
+                            this.invitePage += 1;
+                        });
+                },
+                loadCommissionData() {
+                    // 加载收益概览数据
+                    axios.get('/api/commission/overview')
+                        .then(response => {
+                            const { data } = response.data;
+                            this.totalCommission = data.total;
+                            this.monthCommission = data.month;
+                            this.inviteCount = data.inviteCount;
+                            this.availableAmount = data.available;
+                        });
+                }
+            },
+            mounted() {
+                this.loadCommissionData();
+            }
+        });
+    </script>
+</body>
+</html> 

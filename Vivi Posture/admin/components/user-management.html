@@ -1,0 +1,341 @@
+<template id="user-management-template">
+    <div class="user-management">
+        <!-- 搜索和筛选 -->
+        <div class="filter-bar">
+            <van-search
+                v-model="searchKey"
+                placeholder="搜索用户名/手机号"
+                @search="onSearch"
+            />
+            <van-dropdown-menu>
+                <van-dropdown-item v-model="userStatus" :options="statusOptions" />
+                <van-dropdown-item v-model="sortBy" :options="sortOptions" />
+            </van-dropdown-menu>
+        </div>
+
+        <!-- 用户列表 -->
+        <van-list
+            v-model="loading"
+            :finished="finished"
+            finished-text="没有更多了"
+            @load="onLoad"
+        >
+            <div class="user-list">
+                <div v-for="user in users" :key="user.id" class="user-card">
+                    <div class="user-info">
+                        <van-image
+                            round
+                            width="50"
+                            height="50"
+                            :src="user.avatar"
+                        />
+                        <div class="user-details">
+                            <div class="user-name">{{ user.name }}</div>
+                            <div class="user-phone">{{ user.phone }}</div>
+                        </div>
+                    </div>
+                    <div class="user-stats">
+                        <div class="stat-item">
+                            <span class="label">消费总额</span>
+                            <span class="value">RM {{ user.total_spent }}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="label">订单数</span>
+                            <span class="value">{{ user.order_count }}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="label">注册时间</span>
+                            <span class="value">{{ formatDate(user.created_at) }}</span>
+                        </div>
+                    </div>
+                    <div class="user-actions">
+                        <van-button size="small" @click="showUserDetail(user)">详情</van-button>
+                        <van-button size="small" type="primary" @click="editUser(user)">编辑</van-button>
+                        <van-button 
+                            size="small" 
+                            :type="user.status === 'active' ? 'danger' : 'success'"
+                            @click="toggleUserStatus(user)"
+                        >
+                            {{ user.status === 'active' ? '禁用' : '启用' }}
+                        </van-button>
+                    </div>
+                </div>
+            </div>
+        </van-list>
+
+        <!-- 用户详情弹窗 -->
+        <van-popup v-model="showDetail" position="right" style="width: 80%; height: 100%;">
+            <div class="user-detail-popup" v-if="currentUser">
+                <van-nav-bar
+                    title="用户详情"
+                    left-arrow
+                    @click-left="showDetail = false"
+                />
+                <div class="detail-content">
+                    <div class="basic-info">
+                        <van-image
+                            round
+                            width="80"
+                            height="80"
+                            :src="currentUser.avatar"
+                        />
+                        <h3>{{ currentUser.name }}</h3>
+                        <p>{{ currentUser.phone }}</p>
+                    </div>
+                    
+                    <!-- 消费记录 -->
+                    <van-tabs>
+                        <van-tab title="消费记录">
+                            <van-cell-group>
+                                <van-cell 
+                                    v-for="order in userOrders" 
+                                    :key="order.id"
+                                    :title="order.service_name"
+                                    :label="formatDate(order.created_at)"
+                                >
+                                    <template #right-icon>
+                                        <span class="order-amount">RM {{ order.amount }}</span>
+                                    </template>
+                                </van-cell>
+                            </van-cell-group>
+                        </van-tab>
+                        <van-tab title="预约记录">
+                            <!-- 预约记录内容 -->
+                        </van-tab>
+                    </van-tabs>
+                </div>
+            </div>
+        </van-popup>
+
+        <!-- 编辑用户弹窗 -->
+        <van-popup v-model="showEdit" position="bottom">
+            <div class="edit-form">
+                <van-form @submit="submitEdit">
+                    <van-field
+                        v-model="editForm.name"
+                        label="用户名"
+                        placeholder="请输入用户名"
+                        :rules="[{ required: true, message: '请填写用户名' }]"
+                    />
+                    <van-field
+                        v-model="editForm.phone"
+                        label="手机号"
+                        placeholder="请输入手机号"
+                        :rules="[{ required: true, message: '请填写手机号' }]"
+                    />
+                    <van-field
+                        v-model="editForm.email"
+                        label="邮箱"
+                        placeholder="请输入邮箱"
+                    />
+                    <div style="margin: 16px;">
+                        <van-button round block type="primary" native-type="submit">
+                            保存
+                        </van-button>
+                    </div>
+                </van-form>
+            </div>
+        </van-popup>
+    </div>
+</template>
+
+<script>
+Vue.component('user-management', {
+    template: '#user-management-template',
+    data() {
+        return {
+            searchKey: '',
+            userStatus: 'all',
+            sortBy: 'newest',
+            loading: false,
+            finished: false,
+            page: 1,
+            users: [],
+            showDetail: false,
+            showEdit: false,
+            currentUser: null,
+            userOrders: [],
+            editForm: {
+                name: '',
+                phone: '',
+                email: ''
+            },
+            statusOptions: [
+                { text: '全部状态', value: 'all' },
+                { text: '正常', value: 'active' },
+                { text: '已禁用', value: 'disabled' }
+            ],
+            sortOptions: [
+                { text: '最新注册', value: 'newest' },
+                { text: '消费金额', value: 'spent' },
+                { text: '订单数量', value: 'orders' }
+            ]
+        };
+    },
+    methods: {
+        onSearch() {
+            this.users = [];
+            this.page = 1;
+            this.finished = false;
+            this.onLoad();
+        },
+        onLoad() {
+            axios.get('/api/admin/users', {
+                params: {
+                    page: this.page,
+                    status: this.userStatus,
+                    sort: this.sortBy,
+                    search: this.searchKey
+                }
+            })
+            .then(response => {
+                const { data } = response.data;
+                this.users.push(...data.items);
+                this.loading = false;
+                if (data.items.length < 10) {
+                    this.finished = true;
+                }
+                this.page += 1;
+            });
+        },
+        showUserDetail(user) {
+            this.currentUser = user;
+            this.showDetail = true;
+            this.loadUserOrders(user.id);
+        },
+        loadUserOrders(userId) {
+            axios.get(`/api/admin/users/${userId}/orders`)
+                .then(response => {
+                    this.userOrders = response.data.data;
+                });
+        },
+        editUser(user) {
+            this.editForm = { ...user };
+            this.showEdit = true;
+        },
+        submitEdit() {
+            axios.put(`/api/admin/users/${this.editForm.id}`, this.editForm)
+                .then(response => {
+                    if (response.data.code === 200) {
+                        this.$toast.success('更新成功');
+                        this.showEdit = false;
+                        this.onSearch(); // 刷新列表
+                    }
+                });
+        },
+        toggleUserStatus(user) {
+            const newStatus = user.status === 'active' ? 'disabled' : 'active';
+            axios.put(`/api/admin/users/${user.id}/status`, { status: newStatus })
+                .then(response => {
+                    if (response.data.code === 200) {
+                        this.$toast.success('状态更新成功');
+                        user.status = newStatus;
+                    }
+                });
+        },
+        formatDate(date) {
+            return new Date(date).toLocaleString();
+        }
+    }
+});
+</script>
+
+<style>
+.user-management {
+    padding: 20px;
+}
+
+.filter-bar {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.user-card {
+    background: white;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.user-details {
+    margin-left: 15px;
+}
+
+.user-name {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 5px;
+}
+
+.user-phone {
+    font-size: 14px;
+    color: #666;
+}
+
+.user-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 15px;
+    padding: 10px 0;
+    border-top: 1px solid #f5f5f5;
+    border-bottom: 1px solid #f5f5f5;
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.stat-item .label {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 5px;
+}
+
+.stat-item .value {
+    font-size: 14px;
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+.user-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.detail-content {
+    padding: 20px;
+}
+
+.basic-info {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.basic-info h3 {
+    margin: 10px 0 5px;
+}
+
+.basic-info p {
+    color: #666;
+    margin: 0;
+}
+
+.order-amount {
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+.edit-form {
+    padding: 20px;
+}
+</style> 
